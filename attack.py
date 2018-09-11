@@ -1,6 +1,7 @@
 import argparse
 import collections
 import logging
+import math
 import sys
 import time
 
@@ -191,7 +192,7 @@ def main():
 
   # Attack strategy.
   arg_parser.add_argument('--num_attacks', type=int,
-                          default=100, help='Num of attacks')
+                          default=14, help='Num of attacks')
 
   # Program.
   arg_parser.add_argument('--headless', type=bool,
@@ -218,40 +219,21 @@ def main():
   sorted_reports = sorted(
       reports.items(), key=lambda x: x[1].metal + x[1].crystal + x[1].deuterium,
       reverse=True)
-  for coords, planet_info in sorted_reports:
-    logging.info('[{}:{}:{}]: {:,} (M: {:,}, C: {:,}, D: {:,})'.format(
-        coords.galaxy, coords.system, coords.position,
-        planet_info.metal + planet_info.crystal + planet_info.deuterium,
-        planet_info.metal, planet_info.crystal, planet_info.deuterium))
 
-  # For now let's stay in the home galaxy.
-  num_missions = 0
-  num_scans = 0
-  for i, system in enumerate(_iter_coords(home_system, args.num_systems)):
-    if i < args.systems_to_skip:
-      logging.info('Skipping system {} [{}]'.format(i, system))
+  num_targets = 0
+  for coords, planet_info in sorted_reports:
+    if planet_info.fleet_pts > 0 or planet_info.defense_pts > 0:
+      logging.info('Skipping planet with defense')
       continue
-    done = False
-    num_processed_in_this_system = 0
-    while not done:
-      num_missions = go_to_system(b, home_galaxy, system)
-      logging.info('{} ongoing missions'.format(num_missions))
-      logging.info('{} total scans'.format(num_scans))
-      if num_missions >= args.max_missions:
-        # Wait until a mission is done.
-        logging.info('Too many missions. Waiting 10s...')
-        time.sleep(10)
-        continue
-      num_allowed = args.max_missions - num_missions
-      num_processed, done = inspect(
-          b, num_processed_in_this_system, num_allowed,
-          args.rank_min, args.rank_max, home_galaxy, system)
-      num_missions += num_processed
-      num_processed_in_this_system += num_processed
-      num_scans += num_processed
-      if num_scans >= args.max_scans:
-        logging.info('Reached {} scans. Exiting.'.format(args.max_scans))
-        return
+    resources = planet_info.metal + planet_info.crystal + planet_info.deuterium
+    logging.info('[{}:{}:{}]: {:,} (M: {:,}, C: {:,}, D: {:,}) '
+                 '-> {} large cargos'.format(
+                     coords.galaxy, coords.system, coords.position, resources,
+                     planet_info.metal, planet_info.crystal,
+                     planet_info.deuterium, int(math.ceil(resources / 50000))))
+    num_targets += 1
+    if num_targets >= args.num_attacks:
+      break
 
 
 if __name__ == '__main__':
