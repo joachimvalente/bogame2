@@ -216,6 +216,10 @@ def main():
                           default=3000, help='Max rank to send probes')
   arg_parser.add_argument('--max_missions', type=int,
                           default=14, help='Num missions to send at a time')
+  arg_parser.add_argument('--max_scans', type=int,
+                          default=100, help='Num of scans before exiting')
+  arg_parser.add_argument('--systems_to_skip', type=int,
+                          default=0, help='Skip the N closest systems')
 
   # Program.
   arg_parser.add_argument('--headless', type=bool,
@@ -242,7 +246,10 @@ def main():
   # For now let's stay in the home galaxy.
   num_missions = 0
   num_scans = 0
-  for system in _iter_coords(home_system, args.num_systems):
+  for i, system in enumerate(_iter_coords(home_system, args.num_systems)):
+    if i < args.systems_to_skip:
+      logging.info('Skipping system {} [{}]'.format(i, system))
+      continue
     done = False
     num_processed_in_this_system = 0
     while not done:
@@ -261,6 +268,9 @@ def main():
       num_missions += num_processed
       num_processed_in_this_system += num_processed
       num_scans += num_processed
+      if num_scans >= args.max_scans:
+        logging.info('Reached {} scans. Exiting.'.format(args.max_scans))
+        return
 
 
 if __name__ == '__main__':
