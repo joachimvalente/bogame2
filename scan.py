@@ -246,6 +246,7 @@ def main():
   # For now let's stay in the home galaxy.
   num_missions = 0
   num_scans = 0
+  initial_num_missions = None
   for i, system in enumerate(_iter_coords(home_system, args.num_systems)):
     if i < args.systems_to_skip:
       logging.info('Skipping system {} [{}]'.format(i, system))
@@ -254,6 +255,9 @@ def main():
     num_processed_in_this_system = 0
     while not done:
       num_missions = go_to_system(b, home_galaxy, system)
+      if initial_num_missions is None:
+        initial_num_missions = num_missions
+      num_missions -= initial_num_missions
       logging.info('{} ongoing missions'.format(num_missions))
       logging.info('{} total scans'.format(num_scans))
       if num_missions >= args.max_missions:

@@ -12,6 +12,7 @@ from selenium.common.exceptions import TimeoutException
 from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
@@ -61,7 +62,7 @@ def count_fleet(b):
                          By.CLASS_NAME, 'level').text
     logging.info('Planet {} has {} small and {} large cargos'.format(
         i, small_cargos, large_cargos))
-    fleet[i] = small_cargos, large_cargos
+    fleet[i] = int(large_cargos)
 
   return fleet
 
@@ -145,6 +146,49 @@ def gather_reports(b, max_reports):
   return reports
 
 
+def attack(b, coords, num_cargos, planet_num):
+  """Attack a planet at given `coords` from `planet_num` with `num_cargos`."""
+  # Navigate to planet.
+  planets = _finds(_find(b, By.ID,
+                         'planetList'), By.CLASS_NAME, 'planetlink')
+  planet = planets[planet_num]
+  logging.info('Navigating to planet {}'.format(planet_num))
+  planet.click()
+
+  # Navigate to fleet view.
+  logging.info('Navigating to fleet view')
+  _finds(_find(b, By.ID, 'links'), By.CLASS_NAME, 'menubutton')[7].click()
+
+  # Set num cargos.
+  large_cargos = _find(_find(b, By.ID, 'button203'),
+                       By.CLASS_NAME, 'fleetValues')
+  large_cargos.send_keys(str(num_cargos))
+  _find(b, By.ID, 'continue').click()
+
+  # Set target coords.
+  galaxy = _find(b, By.ID, 'galaxy')
+  system = _find(b, By.ID, 'system')
+  position = _find(b, By.ID, 'position')
+  galaxy.clear()
+  galaxy.send_keys(str(coords.galaxy))
+  system.clear()
+  system.send_keys(str(coords.system))
+  position.clear()
+  position.send_keys(str(coords.position))
+  position.send_keys(Keys.RETURN)
+
+  # Launch attack.
+  _find(b, By.ID, 'missionButton1').click()
+  _find(b, By.ID, 'start').click()
+
+  # Wait for fleet view to be visible again.
+  _find(b, By.ID, 'button203')
+  logging.info(
+      'Launched attack on [{}:{}:{}] with {} cargos from planet {}'.format(
+          coords.galaxy, coords.system, coords.position, num_cargos,
+          planet_num))
+
+
 def _find(b, by, element, timeout=10):
   return WebDriverWait(b, timeout).until(
       EC.presence_of_element_located((by, element)))
@@ -193,6 +237,9 @@ def main():
   # Attack strategy.
   arg_parser.add_argument('--num_attacks', type=int,
                           default=14, help='Num of attacks')
+  arg_parser.add_argument(
+      '--sort_by', choices=['total', 'metal', 'crystal', 'deuterium'],
+      default='total')
 
   # Program.
   arg_parser.add_argument('--headless', type=bool,
@@ -216,24 +263,52 @@ def main():
   connect(b, args.tld, args.email, args.password, args.univ_num)
   fleet = count_fleet(b)
   reports = gather_reports(b, args.max_reports)
+
+  def evaluate(x):
+    if args.sort_by == 'total':
+      return x.metal + x.crystal + x.deuterium
+    if args.sort_by == 'metal':
+      return x.metal
+    if args.sort_by == 'crystal':
+      return x.crystal
+    if args.sort_by == 'deuterium':
+      return x.deuterium
   sorted_reports = sorted(
-      reports.items(), key=lambda x: x[1].metal + x[1].crystal + x[1].deuterium,
+      reports.items(), key=lambda x: evaluate(x[1]),
       reverse=True)
 
   num_targets = 0
+  total_metal = 0
+  total_crystal = 0
+  total_deuterium = 0
+  total = 0
+  planet_num = 0
   for coords, planet_info in sorted_reports:
     if planet_info.fleet_pts > 0 or planet_info.defense_pts > 0:
       logging.info('Skipping planet with defense')
       continue
     resources = planet_info.metal + planet_info.crystal + planet_info.deuterium
+    total_metal += planet_info.metal
+    total_crystal += planet_info.crystal
+    total_deuterium += planet_info.deuterium
+    total += resources
+    num_cargos = int(math.ceil(resources / 50000))
+    while fleet[planet_num] < num_cargos:
+      logging.info(
+          'Not enough cargos on planet {}, trying next one'.format(planet_num))
+      planet_num += 1
     logging.info('[{}:{}:{}]: {:,} (M: {:,}, C: {:,}, D: {:,}) '
                  '-> {} large cargos'.format(
                      coords.galaxy, coords.system, coords.position, resources,
                      planet_info.metal, planet_info.crystal,
-                     planet_info.deuterium, int(math.ceil(resources / 50000))))
+                     planet_info.deuterium, num_cargos))
+    attack(b, coords, num_cargos, planet_num)
+    fleet[planet_num] -= num_cargos
     num_targets += 1
     if num_targets >= args.num_attacks:
       break
+  logging.info('Total plundered: {:,} (M: {:,}, C: {:,}, D: {:,})'.format(
+      total / 2, total_metal / 2, total_crystal / 2, total_deuterium / 2))
 
 
 if __name__ == '__main__':
