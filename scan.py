@@ -70,7 +70,7 @@ def go_to_system(b, galaxy, system):
 
 
 def inspect(b, num_already_processed, num_allowed, rank_min, rank_max, galaxy,
-            system):
+            system, args):
   """Inspect a system.
 
   Args:
@@ -82,27 +82,55 @@ def inspect(b, num_already_processed, num_allowed, rank_min, rank_max, galaxy,
     rank_max: Max rank to probe.
     galaxy: Galaxy (for debug).
     system: System (for debug).
+    args: Command-line args.
 
   Returns:
     num_processed: (int) Num newly processed in this system.
     done: (bool) Whether the scan was complete.
   """
   logging.info('Inspecting...')
-  inactives = _finds(b, By.CSS_SELECTOR,
-                     '.playername.longinactive, .playername.inactive', timeout=2,
-                     timeout_ok=True)
-  logging.info('Found {} inactives'.format(len(inactives)))
+  players = _finds(b, By.CSS_SELECTOR, '.playername',
+                   timeout=2, timeout_ok=True)
+  logging.info('Found {} players'.format(len(players)))
+  potential_targets = []
+  for player in players:
+    classes = player.get_attribute('class')
+    if any(x in classes for x in ['vacation', 'js_no_action', 'banned']):
+      logging.info('Skipping protected player')
+    elif len(classes) == 2:
+      if args.include_normal:
+        logging.info('Adding normal player')
+        potential_targets.append(player)
+      else:
+        logging.info('Skipping normal player')
+    elif 'inactive' in classes or 'longinactive' in classes:
+      if args.include_inactive:
+        logging.info('Adding inactive player')
+        potential_targets.append(player)
+      else:
+        logging.info('Skipping inactive player')
+    elif 'honorableTarget' in classes:
+      if args.include_inactive:
+        logging.info('Adding honorable player')
+        potential_targets.append(player)
+      else:
+        logging.info('Skipping honorable player')
+    else:
+      logging.info(
+          'Skipping unsupported player (classes = {})'.format(classes))
+  logging.info('Found {} potential targets'.format(len(potential_targets)))
   if num_already_processed:
     logging.info('Will skip {} already processed'.format(
         num_already_processed))
   num_processed = 0
-  for inactive in inactives:
+  for potential_target in potential_targets:
     if num_allowed == 0:
       return num_processed, False
-    _hover(b, inactive)
-    player_name = inactive.text
+    _hover(b, potential_target)
+    player_name = potential_target.text
     while True:
-      player_id = _find(inactive, By.TAG_NAME, 'a').get_attribute('rel')
+      player_id = _find(potential_target, By.TAG_NAME,
+                        'a').get_attribute('rel')
       if player_id:
         break
     player_rank = None
@@ -117,11 +145,12 @@ def inspect(b, num_already_processed, num_allowed, rank_min, rank_max, galaxy,
     if not player_rank:
       logging.info('Skipping bogus')
       continue
-    planet_name = _find(_find(inactive, By.XPATH, '..'),
+    planet_name = _find(_find(potential_target, By.XPATH, '..'),
                         By.CLASS_NAME, 'planetname').text
     planet_position = int(
-        _find(_find(inactive, By.XPATH, '..'), By.CLASS_NAME, 'position').text)
-    logging.info('Inactive: {}:{}:{} [{}] - {} (rank {})'.format(
+        _find(_find(potential_target, By.XPATH, '..'), By.CLASS_NAME,
+              'position').text)
+    logging.info('Potential target: {}:{}:{} [{}] - {} (rank {})'.format(
         galaxy, system, planet_position, planet_name, player_name, player_rank))
     if rank_min <= player_rank <= rank_max:
       if num_already_processed:
@@ -130,7 +159,7 @@ def inspect(b, num_already_processed, num_allowed, rank_min, rank_max, galaxy,
       else:
         logging.info('--> Sending probe to {}:{}:{}'.format(
             galaxy, system, planet_position))
-        _click(b, _find(_find(inactive, By.XPATH, '..'), By.CLASS_NAME,
+        _click(b, _find(_find(potential_target, By.XPATH, '..'), By.CLASS_NAME,
                         'espionage'))
         num_processed += 1
         num_allowed -= 1
@@ -221,6 +250,11 @@ def main():
   arg_parser.add_argument('--systems_to_skip', type=int,
                           default=0, help='Skip the N closest systems')
 
+  # Targets.
+  arg_parser.add_argument('--include_inactive', type=bool, default=True)
+  arg_parser.add_argument('--include_honorable', type=bool, default=False)
+  arg_parser.add_argument('--include_normal', type=bool, default=False)
+
   # Program.
   arg_parser.add_argument('--headless', type=bool,
                           default=False, help='Use headless browser')
@@ -268,7 +302,7 @@ def main():
       num_allowed = args.max_missions - num_missions
       num_processed, done = inspect(
           b, num_processed_in_this_system, num_allowed,
-          args.rank_min, args.rank_max, home_galaxy, system)
+          args.rank_min, args.rank_max, home_galaxy, system, args)
       num_missions += num_processed
       num_processed_in_this_system += num_processed
       num_scans += num_processed
