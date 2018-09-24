@@ -223,12 +223,12 @@ def main():
   arg_parser = argparse.ArgumentParser()
 
   # Login args.
-  arg_parser.add_argument('--tld', type=str, help='TLD', required=True)
+  arg_parser.add_argument('-c', '--tld', type=str, help='TLD', required=True)
   arg_parser.add_argument('-u', '--email', type=str,
                           help='Email', required=True)
   arg_parser.add_argument('-p', '--password', type=str,
                           help='Password', required=True)
-  arg_parser.add_argument('-n', '--univ_num', type=int,
+  arg_parser.add_argument('--univ_num', type=int,
                           help='Index of univ', default=0)
 
   # Reports params.
@@ -236,7 +236,7 @@ def main():
                           help='Maximum num of reports to parse')
 
   # Attack strategy.
-  arg_parser.add_argument('--num_attacks', type=int, required=True,
+  arg_parser.add_argument('-n', '--num_attacks', type=int, required=True,
                           help='Num of attacks')
   arg_parser.add_argument(
       '--sort_by', choices=['total', 'metal', 'crystal', 'deuterium'],
@@ -244,7 +244,8 @@ def main():
   arg_parser.add_argument('--action', choices=['attack', 'export'],
                           default='export',
                           help='Whether to actually attack or export as CSV')
-  arg_parser.add_argument('--output', type=str, default='reports.csv')
+  arg_parser.add_argument('--output', type=str, default='reports.csv',
+                          help='Where to output the CSV if action == export')
 
   # Program.
   arg_parser.add_argument('--headless', type=bool,

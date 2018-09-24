@@ -110,7 +110,7 @@ def inspect(b, num_already_processed, num_allowed, rank_min, rank_max, galaxy,
       else:
         logging.info('Skipping inactive player')
     elif 'honorableTarget' in classes:
-      if args.include_inactive:
+      if args.include_honorable:
         logging.info('Adding honorable player')
         potential_targets.append(player)
       else:
@@ -224,12 +224,12 @@ def main():
   arg_parser = argparse.ArgumentParser()
 
   # Login args.
-  arg_parser.add_argument('--tld', type=str, help='TLD', required=True)
+  arg_parser.add_argument('-c', '--tld', type=str, help='TLD', required=True)
   arg_parser.add_argument('-u', '--email', type=str,
                           help='Email', required=True)
   arg_parser.add_argument('-p', '--password', type=str,
                           help='Password', required=True)
-  arg_parser.add_argument('-n', '--univ_num', type=int,
+  arg_parser.add_argument('--univ_num', type=int,
                           help='Index of univ', default=0)
 
   # Universe structure.
@@ -239,14 +239,14 @@ def main():
   # Probe strategy.
   arg_parser.add_argument('--planet_num', type=int,
                           default=0, help='Which planet to use')
-  arg_parser.add_argument('--rank_min', type=int,
-                          default=800, help='Min rank to send probes')
-  arg_parser.add_argument('--rank_max', type=int,
-                          default=3000, help='Max rank to send probes')
-  arg_parser.add_argument('--max_missions', type=int,
-                          default=14, help='Num missions to send at a time')
-  arg_parser.add_argument('--max_scans', type=int,
-                          default=100, help='Num of scans before exiting')
+  arg_parser.add_argument('--rank_min', type=int, required=True,
+                          help='Min rank to send probes')
+  arg_parser.add_argument('--rank_max', type=int, required=True,
+                          help='Max rank to send probes')
+  arg_parser.add_argument('--parallelisms', type=int, required=True,
+                          help='Num missions to send at a time')
+  arg_parser.add_argument('-n', '--max_scans', type=int, required=True,
+                          help='Num of scans before exiting')
   arg_parser.add_argument('--systems_to_skip', type=int,
                           default=0, help='Skip the N closest systems')
 
@@ -294,12 +294,12 @@ def main():
       num_missions -= initial_num_missions
       logging.info('{} ongoing missions'.format(num_missions))
       logging.info('{} total scans'.format(num_scans))
-      if num_missions >= args.max_missions:
+      if num_missions >= args.parallelisms:
         # Wait until a mission is done.
         logging.info('Too many missions. Waiting 10s...')
         time.sleep(10)
         continue
-      num_allowed = args.max_missions - num_missions
+      num_allowed = args.parallelisms - num_missions
       num_processed, done = inspect(
           b, num_processed_in_this_system, num_allowed,
           args.rank_min, args.rank_max, home_galaxy, system, args)
