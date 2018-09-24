@@ -22,10 +22,9 @@ python3 scan.py \
 # and no defense.
 python3 attack.py \
 -c=<country> -u=<email> -p=<password> \
---action=attack \
 --max_reports=100 \
---num_attacks=10 \
 --sort_by=crystal \
+--num_attacks=10 \
 --verbose=true
 ```
 
@@ -49,8 +48,7 @@ python3 scan.py \
 # Parse the last 100 scan reports and export them as CSV.
 python3 attack.py \
 -c=<country> -u=<email> -p=<password> \
---action=export \
 --max_reports=100 \
---num_attacks=10 \
+--csv=reports.csv \
 --verbose=true
 ```
