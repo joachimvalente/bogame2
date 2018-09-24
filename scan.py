@@ -96,25 +96,19 @@ def inspect(b, num_already_processed, num_allowed, rank_min, rank_max, galaxy,
   for player in players:
     classes = player.get_attribute('class')
     if any(x in classes for x in ['vacation', 'js_no_action', 'banned']):
-      logging.info('Skipping protected player')
+      pass
     elif len(classes) == 2:
       if args.include_normal:
         logging.info('Adding normal player')
         potential_targets.append(player)
-      else:
-        logging.info('Skipping normal player')
     elif 'inactive' in classes or 'longinactive' in classes:
       if args.include_inactive:
         logging.info('Adding inactive player')
         potential_targets.append(player)
-      else:
-        logging.info('Skipping inactive player')
     elif 'honorableTarget' in classes:
       if args.include_honorable:
         logging.info('Adding honorable player')
         potential_targets.append(player)
-      else:
-        logging.info('Skipping honorable player')
     else:
       logging.info(
           'Skipping unsupported player (classes = {})'.format(classes))
@@ -272,7 +266,7 @@ def main():
   options = webdriver.ChromeOptions()
   if args.headless:
     options.set_headless()
-  b = webdriver.Chrome(chrome_options=options)
+  b = webdriver.Chrome(options=options)
 
   connect(b, args.tld, args.email, args.password, args.univ_num)
   home_galaxy, home_system = go_to_galaxy_view(b, args.planet_num)

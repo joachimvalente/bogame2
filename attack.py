@@ -264,7 +264,7 @@ def main():
   options = webdriver.ChromeOptions()
   if args.headless:
     options.set_headless()
-  b = webdriver.Chrome(chrome_options=options)
+  b = webdriver.Chrome(options=options)
 
   connect(b, args.tld, args.email, args.password, args.univ_num)
   if args.action == 'attack':
