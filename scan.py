@@ -243,7 +243,7 @@ def main():
                           help='Min rank to send probes')
   arg_parser.add_argument('--rank_max', type=int, required=True,
                           help='Max rank to send probes')
-  arg_parser.add_argument('--parallelisms', type=int, required=True,
+  arg_parser.add_argument('--parallelism', type=int, required=True,
                           help='Num missions to send at a time')
   arg_parser.add_argument('-n', '--max_scans', type=int, required=True,
                           help='Num of scans before exiting')
@@ -294,12 +294,12 @@ def main():
       num_missions -= initial_num_missions
       logging.info('{} ongoing missions'.format(num_missions))
       logging.info('{} total scans'.format(num_scans))
-      if num_missions >= args.parallelisms:
+      if num_missions >= args.parallelism:
         # Wait until a mission is done.
         logging.info('Too many missions. Waiting 10s...')
         time.sleep(10)
         continue
-      num_allowed = args.parallelisms - num_missions
+      num_allowed = args.parallelism - num_missions
       num_processed, done = inspect(
           b, num_processed_in_this_system, num_allowed,
           args.rank_min, args.rank_max, home_galaxy, system, args)
