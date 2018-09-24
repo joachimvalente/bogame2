@@ -7,6 +7,7 @@ import math
 import time
 
 from selenium.common.exceptions import StaleElementReferenceException
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 
@@ -35,10 +36,14 @@ def gather_reports(b, args):
       logging.info('Waiting for page to be ready')
       time.sleep(0.5)
       try:
-        top_msg_id = sln.finds(b, By.CLASS_NAME, 'msg')[
+        top_msg_id = sln.finds(b, By.CLASS_NAME, 'msg', timeout=5)[
             0].get_attribute('data-msg-id')
       except StaleElementReferenceException:
         continue
+      except TimeoutException:
+        # Most likely indicates there are no probe reports.
+        logging.warn('Cannot find messages, returning empty list')
+        return []
       page_ready = last_data_msg_id is None or last_data_msg_id != top_msg_id
     last_data_msg_id = top_msg_id
 
@@ -126,6 +131,8 @@ def export(b, reports, args):
 
 def attack(b, reports, args):
   """Attack most lucrative undefended targets."""
+  max_attacks = min(args.num_attacks, len(reports))
+
   # Count fleet.
   fleet = count_large_cargos(b)
 
@@ -138,26 +145,40 @@ def attack(b, reports, args):
   planet_num = 0
   for coords, planet_info in reports:
 
-    # Check defense.
+    # Check if we're done.
+    if num_targets >= max_attacks:
+      logging.info('Launched {} attacks'.format(num_targets))
+      break
+
+    # Skip planets with defense.
     if planet_info.fleet_pts > 0 or planet_info.defense_pts > 0:
       logging.info('Skipping planet with defense')
       continue
 
-    # Count resources accrued so far.
+    # Count number of cargos needed.
     resources = (
         planet_info.metal + planet_info.crystal + planet_info.deuterium)
-    total_metal += planet_info.metal
-    total_crystal += planet_info.crystal
-    total_deuterium += planet_info.deuterium
-    total += resources
-
-    # Count number of cargos needed and whether we need to attack from the next
-    # planet.
     num_cargos = int(math.ceil(resources / 50000))
-    while fleet[planet_num] < num_cargos:
-      logging.info(
-          'Not enough cargos on planet {}, trying next one'.format(planet_num))
-      planet_num += 1
+    logging.info('Need to send {} cargos'.format(num_cargos))
+
+    # Find planet with largest fleet.
+    planet_num, cargos = max(fleet.items(), key=lambda x: x[1])
+    if not cargos:
+      logging.info('Used all cargos available')
+      break
+    logging.info(
+        'Using planet #{} which has the largest fleet ({} cargos)'.format(
+            planet_num, cargos))
+    num_cargos = min(num_cargos, cargos)
+    logging.info('Will send {} cargs'.format(num_cargos))
+
+    # Count resources accrued so far.
+    plundered = min(resources, 25000 * cargos)
+    ratio = float(plundered) / resources
+    total_metal += int(math.floor(planet_info.metal * ratio))
+    total_crystal += int(math.floor(planet_info.crystal * ratio))
+    total_deuterium += int(math.floor(planet_info.deuterium * ratio))
+    total += plundered
 
     # Launch attack.
     logging.info('[{}:{}:{}]: {:,} (M: {:,}, C: {:,}, D: {:,}) '
@@ -168,8 +189,6 @@ def attack(b, reports, args):
     attack_target(b, coords, planet_num, num_cargos)
     fleet[planet_num] -= num_cargos
     num_targets += 1
-    if num_targets >= args.num_attacks:
-      break
 
   logging.info('Total plundered: {:,} (M: {:,}, C: {:,}, D: {:,})'.format(
       total / 2, total_metal / 2, total_crystal / 2, total_deuterium / 2))
@@ -199,8 +218,13 @@ def count_large_cargos(b):
       sln.finds(sln.find(b, By.ID, 'links'),
                 By.CLASS_NAME, 'menubutton')[7].click()
 
-    large_cargos = sln.find(sln.find(b, By.ID, 'button203'),
-                            By.CLASS_NAME, 'level').text
+    try:
+      large_cargos = sln.find(sln.find(b, By.ID, 'button203', timeout=5),
+                              By.CLASS_NAME, 'level').text
+    except TimeoutException:
+      # Most likely indicates there is no fleet on this planet.
+      logging.warn('No fleet on this planet')
+      large_cargos = 0
     logging.info('Planet {} has {} large cargos'.format(i, large_cargos))
     fleet[i] = int(large_cargos)
 
@@ -244,7 +268,7 @@ def attack_target(b, coords, planet_num, num_cargos):
   sln.find(b, By.ID, 'start').click()
 
   # Wait for fleet view to be visible again.
-  sln.wait_until(b, By.ID, 'button203')
+  sln.wait_until(b, By.ID, 'movements')
   logging.info(
       'Launched attack on [{}:{}:{}] with {} cargos from planet {}'.format(
           coords.galaxy, coords.system, coords.position, num_cargos,
