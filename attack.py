@@ -1,5 +1,6 @@
 import argparse
 import collections
+import csv
 import logging
 import math
 import sys
@@ -231,15 +232,19 @@ def main():
                           help='Index of univ', default=0)
 
   # Reports params.
-  arg_parser.add_argument('--max_reports', type=int,
-                          default=100, help='Maximum num of reports to parse')
+  arg_parser.add_argument('--max_reports', type=int, required=True,
+                          help='Maximum num of reports to parse')
 
   # Attack strategy.
-  arg_parser.add_argument('--num_attacks', type=int,
-                          default=14, help='Num of attacks')
+  arg_parser.add_argument('--num_attacks', type=int, required=True,
+                          help='Num of attacks')
   arg_parser.add_argument(
       '--sort_by', choices=['total', 'metal', 'crystal', 'deuterium'],
       default='total')
+  arg_parser.add_argument('--action', choices=['attack', 'export'],
+                          default='export',
+                          help='Whether to actually attack or export as CSV')
+  arg_parser.add_argument('--output', type=str, default='reports.csv')
 
   # Program.
   arg_parser.add_argument('--headless', type=bool,
@@ -261,7 +266,8 @@ def main():
   b = webdriver.Chrome(chrome_options=options)
 
   connect(b, args.tld, args.email, args.password, args.univ_num)
-  fleet = count_fleet(b)
+  if args.action == 'attack':
+    fleet = count_fleet(b)
   reports = gather_reports(b, args.max_reports)
 
   def evaluate(x):
@@ -277,38 +283,49 @@ def main():
       reports.items(), key=lambda x: evaluate(x[1]),
       reverse=True)
 
-  num_targets = 0
-  total_metal = 0
-  total_crystal = 0
-  total_deuterium = 0
-  total = 0
-  planet_num = 0
-  for coords, planet_info in sorted_reports:
-    if planet_info.fleet_pts > 0 or planet_info.defense_pts > 0:
-      logging.info('Skipping planet with defense')
-      continue
-    resources = planet_info.metal + planet_info.crystal + planet_info.deuterium
-    total_metal += planet_info.metal
-    total_crystal += planet_info.crystal
-    total_deuterium += planet_info.deuterium
-    total += resources
-    num_cargos = int(math.ceil(resources / 50000))
-    while fleet[planet_num] < num_cargos:
-      logging.info(
-          'Not enough cargos on planet {}, trying next one'.format(planet_num))
-      planet_num += 1
-    logging.info('[{}:{}:{}]: {:,} (M: {:,}, C: {:,}, D: {:,}) '
-                 '-> {} large cargos'.format(
-                     coords.galaxy, coords.system, coords.position, resources,
-                     planet_info.metal, planet_info.crystal,
-                     planet_info.deuterium, num_cargos))
-    attack(b, coords, num_cargos, planet_num)
-    fleet[planet_num] -= num_cargos
-    num_targets += 1
-    if num_targets >= args.num_attacks:
-      break
-  logging.info('Total plundered: {:,} (M: {:,}, C: {:,}, D: {:,})'.format(
-      total / 2, total_metal / 2, total_crystal / 2, total_deuterium / 2))
+  if args.action == 'export':
+    columns = Coords._fields + PlanetInfo._fields
+    with open(args.output, 'w') as f:
+      csv_file = csv.DictWriter(f, fieldnames=columns)
+      csv_file.writeheader()
+      for coords, planet_info in sorted_reports:
+        csv_file.writerow(dict(zip(columns, list(coords) + list(planet_info))))
+    logging.info('Wrote reports to {}'.format(args.output))
+
+  elif args.action == 'attack':
+    num_targets = 0
+    total_metal = 0
+    total_crystal = 0
+    total_deuterium = 0
+    total = 0
+    planet_num = 0
+    for coords, planet_info in sorted_reports:
+      if planet_info.fleet_pts > 0 or planet_info.defense_pts > 0:
+        logging.info('Skipping planet with defense')
+        continue
+      resources = (
+          planet_info.metal + planet_info.crystal + planet_info.deuterium)
+      total_metal += planet_info.metal
+      total_crystal += planet_info.crystal
+      total_deuterium += planet_info.deuterium
+      total += resources
+      num_cargos = int(math.ceil(resources / 50000))
+      while fleet[planet_num] < num_cargos:
+        logging.info(
+            'Not enough cargos on planet {}, trying next one'.format(planet_num))
+        planet_num += 1
+      logging.info('[{}:{}:{}]: {:,} (M: {:,}, C: {:,}, D: {:,}) '
+                   '-> {} large cargos'.format(
+                       coords.galaxy, coords.system, coords.position, resources,
+                       planet_info.metal, planet_info.crystal,
+                       planet_info.deuterium, num_cargos))
+      attack(b, coords, num_cargos, planet_num)
+      fleet[planet_num] -= num_cargos
+      num_targets += 1
+      if num_targets >= args.num_attacks:
+        break
+    logging.info('Total plundered: {:,} (M: {:,}, C: {:,}, D: {:,})'.format(
+        total / 2, total_metal / 2, total_crystal / 2, total_deuterium / 2))
 
 
 if __name__ == '__main__':
