@@ -49,6 +49,9 @@ def open_browser_and_connect(args):
   logging.info('Navigating to ' + url)
   b.get(url)
 
+  # Close ad.
+  sln.find(sln.find(b, By.CLASS_NAME, 'openX_int_closeButton'), By.TAG_NAME, 'a').click()
+
   logging.info('Filling login form...')
   sln.find(b, By.ID, 'ui-id-1').click()  # Login tab
   sln.find(b, By.ID, 'usernameLogin').send_keys(args.email)
@@ -87,8 +90,6 @@ def open_browser_and_connect(args):
         accounts[args.univ_num], By.CLASS_NAME, 'server-name-cell').text
     logging.info('Navigating to account {}'.format(account_name))
     sln.find(accounts[args.univ_num], By.TAG_NAME, 'button').click()
-
-  # Else use --univ_name
 
   b.switch_to.window(b.window_handles[-1])
   logging.info('Switched to tab ' + b.current_url)
