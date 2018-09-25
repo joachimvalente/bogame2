@@ -16,8 +16,14 @@ def register_args(arg_parser):
                           help='Email', required=True)
   arg_parser.add_argument('-p', '--password', type=str,
                           help='Password', required=True)
-  arg_parser.add_argument('--univ_num', type=int,
-                          help='Index of univ', default=0)
+
+  # Provide either --univ_name or --univ_num. Since univ indices change
+  # according to which one was used last, --univ_name is recommended.
+  group = arg_parser.add_mutually_exclusive_group()
+  group.add_argument('--univ_num', type=int,
+                     help='Index of univ in the account list (0-based)',
+                     default=0)
+  group.add_argument('--univ_name', type=str, help='Name of univ')
 
   # Program args.
   arg_parser.add_argument('--headless', type=bool,
@@ -55,8 +61,35 @@ def open_browser_and_connect(args):
                                 By.CLASS_NAME, 'rt-tbody'),
                        By.CLASS_NAME, 'rt-tr')
   logging.info('Found {} accounts'.format(len(accounts)))
-  logging.info('Navigating to account #{}'.format(args.univ_num))
-  sln.find(accounts[args.univ_num], By.TAG_NAME, 'button').click()
+
+  # Use --univ_name if it was provided
+  if args.univ_name:
+    account_names = []
+    for account in accounts:
+      account_name = sln.find(account, By.CLASS_NAME, 'server-name-cell').text
+      account_names.append(account_name)
+      if account_name == args.univ_name:
+        logging.info('Navigating to account {}'.format(account_name))
+        sln.find(accounts[args.univ_num], By.TAG_NAME, 'button').click()
+        break
+    else:  # could not find --univ_name
+      raise ValueError(
+          'Could not find account with --univ_name = {}; '
+          'accounts found are [{}]'.format(
+              args.univ_name, ', '.join(account_names)))
+
+  # Else use --univ_num
+  else:
+    if not 0 <= args.univ_num < len(accounts):
+      raise ValueError('--univ_num should be between 0 and {}; found {}'.format(
+          len(accounts) - 1, args.univ_num))
+    account_name = sln.find(
+        accounts[args.univ_num], By.CLASS_NAME, 'server-name-cell').text
+    logging.info('Navigating to account {}'.format(account_name))
+    sln.find(accounts[args.univ_num], By.TAG_NAME, 'button').click()
+
+  # Else use --univ_name
+
   b.switch_to.window(b.window_handles[-1])
   logging.info('Switched to tab ' + b.current_url)
 
