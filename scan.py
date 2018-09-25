@@ -16,8 +16,16 @@ def scan(b, args):
   num_scans = 0
   initial_num_missions = None
 
-  # For now let's stay in the home galaxy.
-  for i, system in enumerate(iter_coords(home_system, args.num_systems)):
+  # Use home galaxy or galaxy specified in command line.
+  galaxy = args.galaxy or home_galaxy
+  if not 1 <= galaxy <= args.num_galaxies:
+    raise ValueError('Galaxy should be between 1 and {}; got {}'.format(
+        args.num_galaxies, galaxy))
+  logging.info('Scanning galaxy {}'.format(galaxy))
+
+  for i, system in enumerate(
+          iter_coords(home_system, args.num_systems) if galaxy == home_galaxy
+          else range(1, args.num_systems + 1)):
     if i < args.systems_to_skip:
       logging.info('Skipping system {} [{}]'.format(i, system))
       continue
@@ -25,7 +33,7 @@ def scan(b, args):
     system_done = False
     num_processed_in_this_system = 0
     while not system_done:
-      num_ongoing_missions = go_to_system(b, home_galaxy, system)
+      num_ongoing_missions = go_to_system(b, galaxy, system)
 
       if initial_num_missions is None:
         initial_num_missions = num_ongoing_missions
@@ -44,7 +52,7 @@ def scan(b, args):
 
       num_allowed = args.parallelism - num_ongoing_missions
       num_processed, system_done = inspect(
-          b, num_processed_in_this_system, num_allowed, home_galaxy, system,
+          b, num_processed_in_this_system, num_allowed, galaxy, system,
           args)
       num_processed_in_this_system += num_processed
       num_scans += num_processed
@@ -74,6 +82,7 @@ def go_to_galaxy_view(b, planet_num):
 def go_to_system(b, galaxy, system):
   """Navigate to system and return num ongoing missions."""
   logging.info('Navigating to {}:{}'.format(galaxy, system))
+  sln.find(b, By.ID, 'galaxy_input').send_keys(str(galaxy))
   sln.find(b, By.ID, 'system_input').send_keys(str(system))
   sln.find(b, By.CSS_SELECTOR, '#galaxyHeader .btn_blue').click()
 
@@ -238,6 +247,9 @@ def main():
                           help='Num of scans before exiting')
   arg_parser.add_argument('--systems_to_skip', type=int,
                           default=0, help='Skip the N closest systems')
+  arg_parser.add_argument(
+      '--galaxy', type=int,
+      help='If present, scan this galaxy instead of the home galaxy')
 
   # Args for universe structure.
   arg_parser.add_argument('--num_galaxies', type=int, default=7)
