@@ -3,6 +3,7 @@ import logging
 import sys
 
 from selenium import webdriver
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 
 import selenium_lib as sln
@@ -50,7 +51,12 @@ def open_browser_and_connect(args):
   b.get(url)
 
   # Close ad.
-  sln.find(sln.find(b, By.CLASS_NAME, 'openX_int_closeButton'), By.TAG_NAME, 'a').click()
+  try:
+    sln.find(sln.find(
+        b, By.CLASS_NAME, 'openX_int_closeButton', timeout=3),
+        By.TAG_NAME, 'a').click()
+  except TimeoutException:
+    pass
 
   logging.info('Filling login form...')
   sln.find(b, By.ID, 'ui-id-1').click()  # Login tab
